@@ -52,4 +52,4 @@ Hagihara, H., Yamamoto, N., Meng, S., Sakata, C., Wang, J., Watanabe R., & Morig
 <br><br>
   
 ## Contact
-If you have any questions, please email at moriguchi.yusuke.8s<at>kyoto-u.ac.jp or hiromichi.h<at>gmail.com (please replace <at> with @).							
+If you have any questions, please email at **moriguchi.yusuke.8s(AT)kyoto-u.ac.jp** or **hiromichi.h(AT)gmail.com** (please replace **(AT)** with **@**).							
