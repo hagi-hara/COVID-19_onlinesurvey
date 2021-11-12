@@ -1,8 +1,8 @@
 # COVID-19_onlinesurvey
 
 Hagihara, H., Yamamoto, N., Meng, S., Sakata, C., Wang, J., Watanabe R., & Moriguchi, Y. (under review). COVID-19 school and kindergarten closure affects children's social relationships: A longitudinal study in Japan. *Journal Name*. doi:
-
-
+  
+  
 ## Dataset and R Scripts
 - **0_situationInJapan**
   - Data and R scripts to visualize the correspondence between the spread of COVID-19 in Japan and time points of data collection (Figure 1)
@@ -16,9 +16,8 @@ Hagihara, H., Yamamoto, N., Meng, S., Sakata, C., Wang, J., Watanabe R., & Morig
   - R scripts to analyze children's perceived closeness to others using IOS (Figure 4)
 - **data.csv**
   - Dataset used in the folders from 1 to 4
- 
-
-
+   
+  
 ## Description of labels for data.csv
 | label | description |
 |:----|:----|
@@ -47,7 +46,7 @@ Hagihara, H., Yamamoto, N., Meng, S., Sakata, C., Wang, J., Watanabe R., & Morig
 | lessons | Hours spent by children taking lessons or classes other than formal schooling per day |
 | excludeT1T2 | Whether children participating at T1 retained participation at T2 |
 | excludeT2T3 | Whether children participating at T2 retained participation at T3 |
-
-
+  
+  
 ## Contact
 If you have any questions, please email at moriguchi.yusuke.8s <at> kyoto-u.ac.jp or hiromichi.h <at> gmail.com (please replace <at> with @).							
