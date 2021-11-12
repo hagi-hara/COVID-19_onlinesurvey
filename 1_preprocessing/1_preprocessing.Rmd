@@ -1,0 +1,532 @@
+---
+title: "Preprocessing"
+author: "Hagihara"
+date: "2021/1/5"
+output: html_document
+---
+
+<style type="text/css">
+.main-container {
+     max-width: 1800px;
+     margin-left: auto;
+     margin-right: auto;
+}
+</style>
+
+
+Preprocessing
+
+
+# Preparation
+```{r include=FALSE}
+R.version #4.0.4
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(scales)
+library(lsr)
+library(exactRankTests)
+library(effsize)
+library(vcd)
+```
+
+```{r}
+d <- read.csv("../data.csv", header=TRUE)
+head(d)
+summary(d)
+```
+
+
+# Overall Sample Size
+```{r}
+# sample size at T1
+d %>% subset(time=="T1") %>% summarize(N = n())   # N = 700
+d %>% subset(time=="T1") %>% group_by(school) %>% summarize(N = n())
+  # school     N
+  # inf      280
+  # presch   147
+  # sch      273
+
+# sample size at T2
+d %>% subset(time=="T1") %>% group_by(excludeT1T2) %>% summarize(N = n())   # N_adopted = 425, N_excluded = 275
+d %>% subset(time=="T1") %>% group_by(school, excludeT1T2) %>% summarize(N = n())
+  # school excludeT1T2     N
+  # inf    adopted       165
+  # inf    excluded      115
+  # presch adopted        88
+  # presch excluded       59
+  # sch    adopted       172
+  # sch    excluded      101
+
+# sample size at T3
+d %>% subset(time=="T2" & school!="inf") %>% group_by(excludeT2T3) %>% summarize(N = n())   # N_adopted = 130, N_excluded = 130
+d %>% subset(time=="T2") %>% group_by(school, excludeT2T3) %>% summarize(N = n())
+  # school excludeT2T3     N
+  # inf    excluded      165
+  # presch adopted        47
+  # presch excluded       41
+  # sch    adopted        83
+  # sch    excluded       89
+```
+
+
+
+# Comparison between Retained and Dropped Samples
+
+## T1 to T2
+
+### Parental age
+```{r}
+# Figure
+d %>% subset(time=="T1") %>% 
+  ggplot(aes(x=excludeT1T2, y=res_age, fill=excludeT1T2))+
+    geom_violin(color="white", alpha=0.4)+
+    geom_boxplot(fill="white", width=0.4, alpha=0.7)+
+    labs(title="Caregivers' age", x="Retention from T1 to T2", y="Cagivers' age")+
+    theme_bw()
+
+# Stats
+d %>% subset(time=="T1") %>% group_by(excludeT1T2) %>% 
+  summarise(N = n(),
+            Mean = mean(res_age),
+            SD   = sd(res_age)) %>% as.data.frame()
+
+t.test(res_age ~ excludeT1T2, data=d)
+cohensD(res_age ~ excludeT1T2, data=d)
+```
+
+
+### Children age
+```{r}
+# Figure
+d %>% subset(time=="T1") %>% 
+  ggplot(aes(x=excludeT1T2, y=ch_ageM, fill=excludeT1T2))+
+    geom_violin(color="white", alpha=0.4)+
+    geom_boxplot(fill="white", width=0.4, alpha=0.7)+
+    labs(title="Children's age", x="Retention from T1 to T2", y="Children's age in months")+
+    theme_bw()
+
+# Stats
+d %>% subset(time=="T1") %>% group_by(excludeT1T2) %>% 
+  summarise(N = n(),
+            Mean = mean(ch_ageM),
+            SD   = sd(ch_ageM)) %>% as.data.frame()
+
+t.test(ch_ageM ~ excludeT1T2, data=d)
+cohensD(ch_ageM ~ excludeT1T2, data=d)
+```
+
+
+### The number of family members
+```{r}
+# Figure
+d %>% subset(time=="T1") %>% 
+  ggplot(aes(x=excludeT1T2, y=fa_num, fill=excludeT1T2))+
+    geom_violin(color="white", alpha=0.4)+
+    geom_boxplot(fill="white", width=0.4, alpha=0.7)+
+    labs(title="Number of family members", x="Retention from T1 to T2", y="Number of family members")+
+    theme_bw()
+
+# Stats
+d %>% subset(time=="T1") %>% group_by(excludeT1T2) %>% 
+  summarise(N = n(),
+            Mean = mean(fa_num),
+            SD   = sd(fa_num)) %>% as.data.frame()
+
+t.test(fa_num ~ excludeT1T2, data=d)
+cohensD(fa_num ~ excludeT1T2, data=d)
+```
+
+
+### Parental educational level
+```{r}
+# Figure
+d %>% subset(time=="T1") %>% mutate(education=as.factor(education)) %>% 
+  group_by(excludeT1T2, education) %>% summarise(N = n()) %>% 
+  mutate(prop = prop.table(N)) %>% 
+  ggplot(aes(x=excludeT1T2, y=prop, fill=education))+
+    geom_bar(stat="identity", position="fill")+
+    scale_y_continuous(labels=scales::percent)+
+    labs(title="Caregivers' educational background", x="Retention from T1 to T2", y="%")+
+    theme_bw()
+
+# Stats
+d %>% subset(time=="T1") %>% group_by(excludeT1T2) %>% 
+  summarise(N = n(),
+            CountNotError = sum(!is.na(education)),
+            Median = median(education, na.rm=TRUE),
+            Iqr = IQR(education, na.rm=TRUE),
+            q25 = quantile(education, 0.25, na.rm=TRUE),
+            q75 = quantile(education, 0.75, na.rm=TRUE)) %>% as.data.frame() 
+
+wilcox.exact(education ~ excludeT1T2, data=d)
+cliff.delta(education ~ excludeT1T2, data=d)
+```
+
+
+### Parental gender ratio
+```{r}
+# Figure
+d %>% subset(time=="T1") %>% mutate(res_gender=as.factor(res_gender)) %>%
+  group_by(excludeT1T2, res_gender) %>% 
+  summarise(N = n()) %>% 
+  mutate(prop = prop.table(N)) %>% 
+  ggplot(aes(x=excludeT1T2, y=prop, fill=res_gender))+
+    geom_bar(stat="identity", position="fill")+
+    scale_y_continuous(labels = scales::percent)+
+    labs(title="Parental gender ratio (1=male, 2=female)", x="Retention from T1 to T2", y="%")+
+    theme_bw()
+
+# Stats
+d %>% subset(time=="T1") %>% mutate(res_gender=as.character(res_gender)) %>%
+  group_by(excludeT1T2) %>% 
+  summarise(N = n(),
+            Female = sum(res_gender==2),
+            FemaleRate = Female / N) %>% as.data.frame()
+
+table(d[d$time=="T1",]$excludeT1T2, d[d$time=="T1",]$res_gender) %>% chisq.test(correct=FALSE)
+table(d[d$time=="T1",]$excludeT1T2, d[d$time=="T1",]$res_gender) %>% assocstats()
+```
+
+
+### Children gender ratio
+```{r}
+# Figure
+d %>% subset(time=="T1") %>% mutate(ch_gender=as.factor(ch_gender)) %>%
+  group_by(excludeT1T2, ch_gender) %>% 
+  summarise(N = n()) %>% 
+  mutate(prop = prop.table(N)) %>% 
+  ggplot(aes(x=excludeT1T2, y=prop, fill=ch_gender))+
+    geom_bar(stat="identity", position="fill")+
+    scale_y_continuous(labels = scales::percent)+
+    labs(title="CHildren's gender ratio (1=male, 2=female)", x="Retention from T1 to T2", y="%")+
+    theme_bw()
+
+# Stats
+d %>% subset(time=="T1") %>% mutate(ch_gender=as.character(ch_gender)) %>%
+  group_by(excludeT1T2) %>% 
+  summarise(N = n(),
+            Female = sum(ch_gender==2),
+            FemaleRate = Female / N) %>% as.data.frame()
+
+table(d[d$time=="T1",]$excludeT1T2, d[d$time=="T1",]$ch_gender) %>% chisq.test(correct=FALSE)
+table(d[d$time=="T1",]$excludeT1T2, d[d$time=="T1",]$ch_gender) %>% assocstats()
+
+prop.test(c(217, 133), c(425, 275), correct=FALSE)
+```
+
+
+### SDQ
+```{r}
+# Total Difficulties Score
+d.T1.sdqtds <- d %>% subset(time=="T1" & school != "inf") 
+
+subcatlab <- as_labeller(c("presch" = "Preschoolers", "sch" = "Schoolers"))
+
+d.T1.sdqtds %>%  
+  group_by(excludeT1T2, school) %>% 
+  summarise(N = n(),
+            M = mean(sdq_sum),
+            SD = sd(sdq_sum),
+            SE = SD / sqrt(N)) %>% 
+  ungroup() %>% 
+  ggplot(aes(x=excludeT1T2, color=school))+
+    geom_violin(data=d.T1.sdqtds, aes(y=sdq_sum, fill=school), color="white", alpha=0.2)+
+    geom_point(aes(y=M), size=3)+
+    geom_line(aes(y=M, group=school), size=1.2)+
+    geom_errorbar(aes(ymin=M-SE, ymax=M+SE), size=1, width=0.3)+
+    facet_wrap(~school, labeller=subcatlab)+
+    labs(title="SDQ: Total difficulties score", x="Retention from T1 to T2", y="TDS")+
+    scale_y_continuous(limits=c(0,32))+
+    theme_bw()
+```
+
+
+```{r}
+# Subcategory score
+d.T1.sdqsub <- d.T1.sdqtds %>% 
+  pivot_longer(c(conduct, hyperactive, emotional, peer, prosocial),
+               names_to  ="subcat",
+               values_to ="sdqscore") 
+
+subcatlab <- as_labeller(c("presch" = "Preschoolers", "sch" = "Schoolers",
+                           "conduct" = "Conduct", "emotional" = "Emotional", "hyperactive"="Hyperactive", "peer" = "Peer", "prosocial"="Prosocial"))
+
+d.T1.sdqsub %>% group_by(excludeT1T2, subcat, school) %>% 
+  summarise(N = n(),
+            M = mean(sdqscore),
+            SD = sd(sdqscore),
+            SE = SD / sqrt(N)) %>% 
+  ungroup() %>% 
+  ggplot(aes(x=excludeT1T2, color=school))+
+    geom_violin(data=d.T1.sdqsub, aes(y=sdqscore, fill=school), color="white", alpha=0.2)+
+    geom_point(aes(y=M), size=3)+
+    geom_line(aes(y=M, group=school), size=1.2)+
+    geom_errorbar(aes(ymin=M-SE, ymax=M+SE), size=1, width=0.3)+
+    facet_grid(school~subcat, labeller=subcatlab)+
+    labs(title="SDQ: Subcategory score", x="Retention from T1 to T2", y="Subcategory score)")+
+    theme_bw()+
+    theme(axis.text.x=element_text(angle=45, hjust=1))+
+    scale_y_continuous(limits=c(0,10))
+```
+
+
+### IOS
+```{r}
+d.T1.ios <- d %>% subset(time=="T1") %>% 
+  pivot_longer(c(ios_cg, ios_oth),
+               names_to  ="whom",
+               values_to ="ios") %>%
+  mutate(whom=case_when(whom=="ios_cg" ~ "child-parent", T ~ "child-other"))
+
+
+subcatlab <- as_labeller(c("inf" = "Infants", "presch" = "Preschoolers", "sch" = "Schoolers",
+                           "caregivers" = "child-parent", "others" = "child-other"))
+
+d.T1.ios %>% 
+  group_by(excludeT1T2, whom, school) %>% 
+  summarise(N = n(),
+            M = mean(ios),
+            SD = sd(ios),
+            SE = SD / sqrt(N)) %>% 
+  ungroup() %>% 
+  ggplot(aes(x=excludeT1T2, color=whom))+
+    geom_jitter(data=d.T1.ios, aes(y=ios, color=whom), size=2, height=0.15, width=0.15, alpha=0.04)+
+    geom_point(aes(y=M), size=2.8)+
+    geom_line(aes(y=M, group=whom), size=1.3)+
+    geom_errorbar(aes(ymin=M-SE, ymax=M+SE), size=1.2, width=0.15)+
+    facet_wrap(~school, labeller=subcatlab)+
+    labs(x="Time", x="Retention from T1 to T2", y="IOS score", color="Relationship")+
+    guides(color=guide_legend(reverse=TRUE))+
+    scale_y_continuous(limits=c(0.8,7.2), breaks=1:7)+
+    theme_bw()
+```
+
+
+
+## T2 to T3
+
+### Parental age
+```{r}
+# Figure
+d %>% subset(time=="T2" & school!="inf") %>% 
+  ggplot(aes(x=excludeT2T3, y=res_age, fill=excludeT2T3))+
+    geom_violin(color="white", alpha=0.4)+
+    geom_boxplot(fill="white", width=0.4, alpha=0.7)+
+    labs(title="Caregivers' age", x="Retention from T2 to T3", y="Cagivers' age")+
+    theme_bw()
+
+# Stats
+d %>% subset(time=="T2" & school!="inf") %>% group_by(excludeT2T3) %>% 
+  summarise(N = n(),
+            Mean = mean(res_age),
+            SD   = sd(res_age)) %>% as.data.frame()
+
+t.test(res_age ~ excludeT2T3, data=d[d$school!="inf",])
+cohensD(res_age ~ excludeT2T3, data=d[d$school!="inf",])
+```
+
+
+### Children age
+```{r}
+# Figure
+d %>% subset(time=="T2" & school!="inf") %>% 
+  ggplot(aes(x=excludeT2T3, y=ch_ageM, fill=excludeT2T3))+
+    geom_violin(color="white", alpha=0.4)+
+    geom_boxplot(fill="white", width=0.4, alpha=0.7)+
+    labs(title="Children's age", x="Retention from T2 to T3", y="Children's age in months")+
+    theme_bw()
+
+# Stats
+d %>% subset(time=="T2" & school!="inf") %>% group_by(excludeT2T3) %>% 
+  summarise(N = n(),
+            Mean = mean(ch_ageM),
+            SD   = sd(ch_ageM)) %>% as.data.frame()
+
+t.test(ch_ageM ~ excludeT2T3, data=d[d$school!="inf",])
+cohensD(ch_ageM ~ excludeT2T3, data=d[d$school!="inf",])
+```
+
+
+### The number of family members
+```{r}
+# Figure
+d %>% subset(time=="T2" & school!="inf") %>% 
+  ggplot(aes(x=excludeT2T3, y=fa_num, fill=excludeT2T3))+
+    geom_violin(color="white", alpha=0.4)+
+    geom_boxplot(fill="white", width=0.4, alpha=0.7)+
+    labs(title="Number of family members", x="Retention from T2 to T3", y="Number of family members")+
+    theme_bw()
+
+# Stats
+d %>% subset(time=="T2" & school!="inf") %>% group_by(excludeT2T3) %>% 
+  summarise(N = n(),
+            Mean = mean(fa_num),
+            SD   = sd(fa_num)) %>% as.data.frame()
+
+t.test(fa_num ~ excludeT2T3, data=d[d$school!="inf",])
+cohensD(fa_num ~ excludeT2T3, data=d[d$school!="inf",])
+```
+
+
+### Parental educational level
+```{r}
+# Figure
+d %>% subset(time=="T2" & school!="inf") %>% mutate(education=as.factor(education)) %>% 
+  group_by(excludeT2T3, education) %>% summarise(N = n()) %>% 
+  mutate(prop = prop.table(N)) %>% 
+  ggplot(aes(x=excludeT2T3, y=prop, fill=education))+
+    geom_bar(stat="identity", position="fill")+
+    scale_y_continuous(labels=scales::percent)+
+    labs(title="Caregivers' educational background", x="Retention from T2 to T3", y="%")+
+    theme_bw()
+
+# Stats
+d %>% subset(time=="T2" & school!="inf") %>% group_by(excludeT2T3) %>% 
+  summarise(N = n(),
+            CountNotError = sum(!is.na(education)),
+            Median = median(education, na.rm=TRUE),
+            Iqr = IQR(education, na.rm=TRUE),
+            q25 = quantile(education, 0.25, na.rm=TRUE),
+            q75 = quantile(education, 0.75, na.rm=TRUE)) %>% as.data.frame() 
+
+wilcox.exact(education ~ excludeT2T3, data=d[d$school!="inf",])
+cliff.delta(education ~ excludeT2T3, data=d[d$school!="inf",])
+```
+
+
+### Parental gender ratio
+```{r}
+# Figure
+d %>% subset(time=="T2" & school!="inf") %>% mutate(res_gender=as.factor(res_gender)) %>%
+  group_by(excludeT2T3, res_gender) %>% 
+  summarise(N = n()) %>% 
+  mutate(prop = prop.table(N)) %>% 
+  ggplot(aes(x=excludeT2T3, y=prop, fill=res_gender))+
+    geom_bar(stat="identity", position="fill")+
+    scale_y_continuous(labels = scales::percent)+
+    labs(title="Parental gender ratio (1=male, 2=female)", x="Retention from T2 to T3", y="%")+
+    theme_bw()
+
+# Stats
+d %>% subset(time=="T2" & school!="inf") %>% mutate(res_gender=as.character(res_gender)) %>%
+  group_by(excludeT2T3) %>% 
+  summarise(N = n(),
+            Female = sum(res_gender==2),
+            FemaleRate = Female / N) %>% as.data.frame()
+
+table(d[d$time=="T2" & d$school!="inf",]$excludeT2T3, d[d$time=="T2" & d$school!="inf",]$res_gender) %>% chisq.test(correct=FALSE)
+table(d[d$time=="T2" & d$school!="inf",]$excludeT2T3, d[d$time=="T2" & d$school!="inf",]$res_gender) %>% assocstats()
+```
+
+
+### Children gender ratio
+```{r}
+# Figure
+d %>% subset(time=="T2" & school!="inf") %>% mutate(ch_gender=as.factor(ch_gender)) %>%
+  group_by(excludeT2T3, ch_gender) %>% 
+  summarise(N = n()) %>% 
+  mutate(prop = prop.table(N)) %>% 
+  ggplot(aes(x=excludeT2T3, y=prop, fill=ch_gender))+
+    geom_bar(stat="identity", position="fill")+
+    scale_y_continuous(labels = scales::percent)+
+    labs(title="CHildren's gender ratio (1=male, 2=female)", x="Retention from T2 to T3", y="%")+
+    theme_bw()
+
+# Stats
+d %>% subset(time=="T2" & school!="inf") %>% mutate(ch_gender=as.character(ch_gender)) %>%
+  group_by(excludeT2T3) %>% 
+  summarise(N = n(),
+            Female = sum(ch_gender==2),
+            FemaleRate = Female / N) %>% as.data.frame()
+
+table(d[d$time=="T2" & d$school!="inf",]$excludeT2T3, d[d$time=="T2" & d$school!="inf",]$ch_gender) %>% chisq.test(correct=FALSE)
+table(d[d$time=="T2" & d$school!="inf",]$excludeT2T3, d[d$time=="T2" & d$school!="inf",]$ch_gender) %>% assocstats()
+```
+
+
+### SDQ
+```{r}
+# Total Difficulties Score
+d.T2.sdqtds <- d %>% subset(time=="T2" & school != "inf") 
+
+subcatlab <- as_labeller(c("presch" = "Preschoolers", "sch" = "Schoolers"))
+
+d.T2.sdqtds %>%  
+  group_by(excludeT2T3, school) %>% 
+  summarise(N = n(),
+            M = mean(sdq_sum),
+            SD = sd(sdq_sum),
+            SE = SD / sqrt(N)) %>% 
+  ungroup() %>% 
+  ggplot(aes(x=excludeT2T3, color=school))+
+    geom_violin(data=d.T2.sdqtds, aes(y=sdq_sum, fill=school), color="white", alpha=0.2)+
+    geom_point(aes(y=M), size=3)+
+    geom_line(aes(y=M, group=school), size=1.2)+
+    geom_errorbar(aes(ymin=M-SE, ymax=M+SE), size=1, width=0.3)+
+    facet_wrap(~school, labeller=subcatlab)+
+    labs(title="SDQ: Total difficulties score", x="Retention from T2 to T3", y="TDS")+
+    scale_y_continuous(limits=c(0,32))+
+    theme_bw()
+```
+
+
+```{r}
+# Subcategory score
+d.T2.sdqsub <- d.T2.sdqtds %>% 
+  pivot_longer(c(conduct, hyperactive, emotional, peer, prosocial),
+               names_to  ="subcat",
+               values_to ="sdqscore") 
+
+subcatlab <- as_labeller(c("presch" = "Preschoolers", "sch" = "Schoolers",
+                           "conduct" = "Conduct", "emotional" = "Emotional", "hyperactive"="Hyperactive", "peer" = "Peer", "prosocial"="Prosocial"))
+
+d.T2.sdqsub %>% group_by(excludeT2T3, subcat, school) %>% 
+  summarise(N = n(),
+            M = mean(sdqscore),
+            SD = sd(sdqscore),
+            SE = SD / sqrt(N)) %>% 
+  ungroup() %>% 
+  ggplot(aes(x=excludeT2T3, color=school))+
+    geom_violin(data=d.T2.sdqsub, aes(y=sdqscore, fill=school), color="white", alpha=0.2)+
+    geom_point(aes(y=M), size=3)+
+    geom_line(aes(y=M, group=school), size=1.2)+
+    geom_errorbar(aes(ymin=M-SE, ymax=M+SE), size=1, width=0.3)+
+    facet_grid(school~subcat, labeller=subcatlab)+
+    labs(title="SDQ: Subcategory score", x="Retention from T2 to T3", y="Subcategory score)")+
+    theme_bw()+
+    theme(axis.text.x=element_text(angle=45, hjust=1))+
+    scale_y_continuous(limits=c(0,10))
+```
+
+
+### IOS
+```{r}
+d.T2.ios <- d %>% subset(time=="T2" & school != "inf") %>% 
+  pivot_longer(c(ios_cg, ios_oth),
+               names_to  ="whom",
+               values_to ="ios") %>%
+  mutate(whom=case_when(whom=="ios_cg" ~ "child-parent", T ~ "child-other"))
+
+
+subcatlab <- as_labeller(c("inf" = "Infants", "presch" = "Preschoolers", "sch" = "Schoolers",
+                           "caregivers" = "child-parent", "others" = "child-other"))
+
+d.T2.ios %>% 
+  group_by(excludeT2T3, whom, school) %>% 
+  summarise(N = n(),
+            M = mean(ios),
+            SD = sd(ios),
+            SE = SD / sqrt(N)) %>% 
+  ungroup() %>% 
+  ggplot(aes(x=excludeT2T3, color=whom))+
+    geom_jitter(data=d.T2.ios, aes(y=ios, color=whom), size=2, height=0.15, width=0.15, alpha=0.04)+
+    geom_point(aes(y=M), size=2.8)+
+    geom_line(aes(y=M, group=whom), size=1.3)+
+    geom_errorbar(aes(ymin=M-SE, ymax=M+SE), size=1.2, width=0.15)+
+    facet_wrap(~school, labeller=subcatlab)+
+    labs(x="Time", x="Retention from T2 to T3", y="IOS score", color="Relationship")+
+    guides(color=guide_legend(reverse=TRUE))+
+    scale_y_continuous(limits=c(0.8,7.2), breaks=1:7)+
+    theme_bw()
+```

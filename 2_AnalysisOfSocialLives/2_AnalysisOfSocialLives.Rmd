@@ -1,0 +1,256 @@
+---
+title: "2_AnalysisOfSocialLives"
+author: "Hagihara"
+date: "2021/10/24"
+output: html_document
+---
+
+<style type="text/css">
+.main-container {
+     max-width: 1800px;
+     margin-left: auto;
+     margin-right: auto;
+}
+</style>
+
+
+Analysis of Social Lives
+
+
+# Preparation
+```{r include=FALSE}
+R.version   # 4.04
+library(tidyverse)
+library(dplyr)
+#regression
+library(lme4)
+library(lmerTest)
+library(emmeans)
+```
+
+```{r}
+d <- read.csv("../data.csv", header=TRUE) %>% subset(time=="T1" & excludeT1T2!="excluded")
+d <- d %>% rbind(read.csv("../data.csv", header=TRUE) %>% subset(time=="T2"))
+head(d)
+summary(d)
+```
+
+```{r}
+# Preparation for making figures
+thm <-  theme(axis.ticks=element_line(color = "black"),
+              axis.text=element_text(size=14, color = "black"),
+              axis.title=element_text(size=14, color="black"),
+              strip.text=element_text(size=14),
+              legend.title=element_text(size=14, color="black"),
+              legend.position="none")
+```
+
+
+
+# Statistical Analyses
+
+## Children's home confinement per week
+```{r}
+d %>% group_by(time) %>% 
+  summarise(Full = n(),
+            CountError = sum(is.na(ch_sh)),
+            CountNoError = Full - CountError,
+            ErrorRarw = CountError / Full,
+            Mean = mean(ch_sh, na.rm=TRUE),
+            SD   = sd(ch_sh, na.rm=TRUE),
+            SE   = SD / sqrt(CountNoError)) %>% as.data.frame()
+
+d %>% group_by(school, time) %>% 
+  summarise(Full = n(),
+            CountError = sum(is.na(ch_sh)),
+            CountNoError = Full - CountError,
+            ErrorRarw = CountError / Full,
+            Mean = mean(ch_sh, na.rm=TRUE),
+            SD   = sd(ch_sh, na.rm=TRUE),
+            SE   = SD / sqrt(CountNoError)) %>% as.data.frame() -> d.home  
+d.home
+
+subcatlab <- as_labeller(c("inf"="Infants", "presch"="Preschoolers", "sch"="Schoolers"))
+
+d.home %>% ggplot(aes(x=time, fill=school, color=school))+
+    geom_violin(data=d[!is.na(d$ch_sh),], aes(y=ch_sh), alpha=0.2, color="NA")+
+    geom_point(aes(y=Mean), size=3)+
+    geom_linerange(aes(ymin=Mean-SE, ymax=Mean+SE), size=1.5)+
+    geom_line(aes(y=Mean, group=school), size=2)+
+    facet_wrap(~school, labeller=subcatlab)+
+    scale_y_continuous(limits=c(0,8.1))+
+    labs(y="Home confinement \n (days per week)", x="Time")+
+    theme_bw()+
+    thm -> fig.home
+fig.home
+
+ggsave(file="fig.home.png", plot=fig.home, dpi=350, width=8, height=3)
+```
+
+```{r}
+# STATISTICAL TEST
+m.home <- lmer(ch_sh ~ school*time+(1|id), data=d)
+anova(m.home, ddf="Kenward-Roger")
+
+# MULTIPLE COMPARISON
+emmeans(m.home, "school") %>% pairs()
+
+# SIMPLE SLOPE
+m.home.comp <- emmeans(m.home, ~school*time)
+pairs(m.home.comp, simple="each", combine=TRUE)
+```
+
+
+
+## Playing Outside
+
+```{r}
+d %>% group_by(time) %>% 
+  summarise(Full = n(),
+            CountError = sum(is.na(outside_playing)),
+            CountNoError = Full - CountError,
+            ErrorRarw = CountError / Full,
+            Mean = mean(outside_playing, na.rm=TRUE),
+            SD   = sd(outside_playing, na.rm=TRUE),
+            SE   = SD / sqrt(CountNoError)) %>% as.data.frame()
+
+d %>% group_by(school, time) %>% 
+  summarise(Full = n(),
+            CountError = sum(is.na(outside_playing)),
+            CountNoError = Full - CountError,
+            ErrorRarw = CountError / Full,
+            Mean = mean(outside_playing, na.rm=TRUE),
+            SD   = sd(outside_playing, na.rm=TRUE),
+            SE   = SD / sqrt(CountNoError)) %>% as.data.frame() -> d.play  
+d.play
+
+d.play %>% ggplot(aes(x=time, fill=school, color=school))+
+    geom_violin(data=d[!is.na(d$outside_playing),], aes(y=outside_playing), alpha=0.2, color="NA")+  
+    geom_point(aes(y=Mean), size=3)+
+    geom_linerange(aes(ymin=Mean-SE, ymax=Mean+SE), size=1.5)+
+    geom_line(aes(y=Mean, group=school), size=2)+
+    facet_wrap(~school, labeller=subcatlab)+
+    scale_y_continuous(limits=c(-0.2,5.01))+
+    labs(y="Playing outside \n (hours per day)", x="Time")+
+    theme_bw()+
+    thm -> fig.play
+fig.play
+
+ggsave(file="fig.play.png", plot=fig.play, dpi=350, width=8, height=3)
+```
+
+```{r}
+# STATISTICAL TEST
+m.play <- lmer(outside_playing ~ school*time+(1|id), data=d)
+anova(m.play, ddf="Kenward-Roger")
+
+# MULTIPLE COMPARISON
+emmeans(m.play, "school") %>% pairs()
+
+# SIMPLE SLOPE
+m.play.comp <- emmeans(m.play, ~school*time)
+pairs(m.play.comp, simple="each", combine=TRUE) 
+```
+
+
+
+## Screen time
+
+```{r}
+d %>% group_by(time) %>% 
+  summarise(Full = n(),
+            CountError = sum(is.na(scr_time)),
+            CountNoError = Full - CountError,
+            ErrorRarw = CountError / Full,
+            Mean = mean(scr_time, na.rm=TRUE),
+            SD   = sd(scr_time, na.rm=TRUE)) %>% as.data.frame()
+
+d %>% group_by(school, time) %>% 
+  summarise(Full = n(),
+            CountError = sum(is.na(scr_time)),
+            CountNoError = Full - CountError,
+            ErrorRarw = CountError / Full,
+            Mean = mean(scr_time, na.rm=TRUE),
+            SD   = sd(scr_time, na.rm=TRUE),
+            SE   = SD / sqrt(CountNoError)) %>% as.data.frame() -> d.scr  
+d.scr
+
+d.scr %>% ggplot(aes(x=time, fill=school, color=school))+
+    geom_violin(data=d[!is.na(d$scr_time),], aes(y=scr_time), alpha=0.2, color="NA")+ 
+    geom_point(aes(y=Mean), size=3)+
+    geom_linerange(aes(ymin=Mean-SE, ymax=Mean+SE), size=1.5)+
+    geom_line(aes(y=Mean, group=school), size=2)+
+    facet_wrap(~school, labeller=subcatlab)+
+    scale_y_continuous(limits=c(0,15.35), breaks=seq(0,15,3))+
+    labs(y="Screen time \n (hours per day)", x="Time")+
+    theme_bw()+
+    thm -> fig.scr
+fig.scr
+
+ggsave(file="fig.scr.png", plot=fig.scr, dpi=350, width=8, height=3)
+```
+
+```{r}
+# STATISTICAL TEST
+m.scr <- lmer(scr_time ~ school*time+(1|id), data=d)
+anova(m.scr, ddf="Kenward-Roger")
+
+# MULTIPLE COMPARISON
+emmeans(m.scr, "school") %>% pairs()
+
+# SIMPLE SLOPE
+m.scr.comp <- emmeans(m.scr, ~school*time)
+pairs(m.scr.comp, simple="each", combine=TRUE) 
+```
+
+
+
+## Lessons
+
+```{r}
+d %>% group_by(time) %>% 
+  summarise(Full = n(),
+            CountError = sum(is.na(lessons)),
+            CountNoError = Full - CountError,
+            ErrorRarw = CountError / Full,
+            Mean = mean(lessons, na.rm=TRUE),
+            SD   = sd(lessons, na.rm=TRUE)) %>% as.data.frame()
+
+d %>% group_by(school, time) %>% 
+  summarise(Full = n(),
+            CountError = sum(is.na(lessons)),
+            CountNoError = Full - CountError,
+            ErrorRarw = CountError / Full,
+            Mean = mean(lessons, na.rm=TRUE),
+            SD   = sd(lessons, na.rm=TRUE),
+            SE   = SD / sqrt(CountNoError)) %>% as.data.frame() -> d.lesson  
+d.lesson
+
+d.lesson %>% ggplot(aes(x=time, fill=school, color=school))+
+    geom_violin(data=d[!is.na(d$lessons),], aes(y=lessons), alpha=0.2, color="NA")+ 
+    geom_point(aes(y=Mean), size=3)+
+    geom_linerange(aes(ymin=Mean-SE, ymax=Mean+SE), size=1.5)+
+    geom_line(aes(y=Mean, group=school), size=2)+
+    facet_wrap(~school, labeller=subcatlab)+
+    scale_y_continuous(limits=c(-0.5,4.01))+
+    labs(y="Lessons \n (hours per day)", x="Time")+
+    theme_bw()+
+    thm -> fig.lesson
+fig.lesson
+
+ggsave(file="fig.lesson.png", plot=fig.lesson, dpi=350, width=8, height=3)
+```
+
+```{r}
+# STATISTICAL TEST
+m.lesson <- lmer(lessons ~ school*time+(1|id), data=d)
+anova(m.lesson, ddf="Kenward-Roger")
+
+# MULTIPLE COMPARISON
+emmeans(m.lesson, "school") %>% pairs()
+
+# SIMPLE SLOPE
+m.lesson.comp <- emmeans(m.lesson, ~school*time)
+pairs(m.lesson.comp, simple="each", combine=TRUE) 
+```
+

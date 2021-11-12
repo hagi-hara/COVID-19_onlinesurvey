@@ -1,0 +1,185 @@
+---
+title: "Analysis of IOS"
+author: "Hagihara"
+date: "2021/1/5"
+output: html_document
+---
+
+<style type="text/css">
+.main-container {
+     max-width: 1800px;
+     margin-left: auto;
+     margin-right: auto;
+}
+</style>
+
+
+Analysis of IOS
+
+
+# Preparation
+```{r include=FALSE}
+R.version   # 4.04
+library(tidyverse)
+library(dplyr)
+#regression
+library(lme4)
+library(lmerTest)
+library(emmeans)
+```
+
+```{r}
+# Data for Primary Analysis
+d.p <- read.csv("../data.csv", header=TRUE) %>% subset(time=="T1" & excludeT1T2!="excluded")
+d.p <- d.p %>% rbind(read.csv("../data.csv", header=TRUE) %>% subset(time=="T2"))
+head(d.p)
+summary(d.p)
+
+# Data for Follow-up Analysis
+d.s <- read.csv("../data.csv", header=TRUE) %>% subset(time=="T2" & excludeT2T3!="excluded")
+d.s <- d.s %>% rbind(read.csv("../data.csv", header=TRUE) %>% subset(time=="T3"))
+head(d.s)
+summary(d.s)
+```
+
+```{r}
+# Data reshape
+d.p %>% select(id, time, school, ios_cg, ios_oth) %>% 
+  pivot_longer(c(ios_cg, ios_oth),
+               names_to  ="whom",
+               values_to ="ios") %>%
+  mutate(whom = case_when(whom=="ios_cg" ~ "caregivers", T ~ "others")) ->d.p.ios
+head(d.p.ios)
+str(d.p.ios)
+
+d.s %>% select(id, time, school, ios_cg, ios_oth) %>% 
+  pivot_longer(c(ios_cg, ios_oth),
+               names_to  ="whom",
+               values_to ="ios") %>%
+  mutate(whom = case_when(whom=="ios_cg" ~ "caregivers", T ~ "others")) ->d.s.ios
+head(d.s.ios)
+str(d.s.ios)
+```
+
+
+
+# Descriptive Statistics
+```{r}
+d.p.ios %>% group_by(school, whom, time) %>% 
+  summarise(Full = n(),
+            CountError = sum(is.na(ios)),
+            CountNoError = Full - CountError,
+            ErrorRarw = CountError / Full,
+            Mean = mean(ios, na.rm=TRUE),
+            SD   = sd(ios, na.rm=TRUE),
+            SE   = SD / sqrt(CountNoError)) %>% as.data.frame() -> d.p.ios.sum
+d.p.ios.sum
+
+d.s.ios %>% group_by(school, whom, time) %>% 
+  summarise(Full = n(),
+            CountError = sum(is.na(ios)),
+            CountNoError = Full - CountError,
+            ErrorRarw = CountError / Full,
+            Mean = mean(ios, na.rm=TRUE),
+            SD   = sd(ios, na.rm=TRUE),
+            SE   = SD / sqrt(CountNoError)) %>% as.data.frame() -> d.s.ios.sum
+d.s.ios.sum
+```
+
+
+
+# Linear Mixed Model 
+
+## Primary Analysis
+```{r R.options = list(width = 1800)}
+# STATISTICAL TEST
+m.p <- lmer(ios ~ whom*time*school+(1|id)+(1|id:whom)+(1|id:time), data=d.p.ios)
+anova(m.p, ddf="Kenward-Roger")
+
+# SIMPLE SLOPE (whom:time) with fixation of whom
+emmeans(m.p, pairwise ~ time | whom)
+
+# SIMPLE SLOPE (whom:time:school) 
+m.p.comp <- emmeans(m.p, ~ whom*time*school)
+pairs(m.p.comp, simple="each", combine=TRUE)
+```
+
+
+## Follow-up Analysis
+```{r R.options = list(width = 1800)}
+# STATISTICAL TEST
+m.s <- lmer(ios ~ whom*time*school+(1|id)+(1|id:whom)+(1|id:time), data=d.s.ios)
+anova(m.s, ddf="Kenward-Roger")
+
+# SIMPLE SLOPE (whom:time:school) 
+m.s.comp <- emmeans(m.s, ~ whom*time*school)
+pairs(m.s.comp, simple="each", combine=TRUE)
+```
+
+
+
+# Visualization
+```{r}
+subcatlab <- as_labeller(c("inf" = "Infants", "presch" = "Preschoolers", 
+                           "sch" = "Schoolers",
+                           "caregivers" = "child–parent", "others" = "child–other"))
+
+d.all <- read.csv("../data.csv", header=TRUE) %>% select(id, time, school, ios_cg, ios_oth) %>% 
+  rename(caregivers=ios_cg, others=ios_oth)
+
+d.p.ios.sum <- d.p.ios.sum %>% mutate(cat="p")
+d.s.ios.sum <- d.s.ios.sum %>% mutate(cat="s")
+d.ios.sum <- rbind(d.p.ios.sum, d.s.ios.sum)
+
+d.ios.sum.cg <- d.ios.sum %>% subset(whom=="caregivers")
+d.ios.sum.oth <- d.ios.sum %>% subset(whom=="others")
+```
+
+```{r}
+# Child-Parent Relationship
+d.all %>% ggplot(aes(x=time, fill=cat, color=cat))+
+  geom_violin(aes(y=caregivers), alpha=0.2, color="NA", fill="#F8766D")+
+  geom_point(data=d.ios.sum.cg, aes(y=Mean, shape=cat), size=4, position=position_dodge(width=0.6))+
+  geom_linerange(data=d.ios.sum.cg, aes(ymin=Mean-SE, ymax=Mean+SE), size=1.5, position=position_dodge(width=0.6))+
+  geom_line(data=d.ios.sum.cg, aes(y=Mean, group=cat), size=2, position=position_dodge(width=0.6))+
+  # Other Properties
+  facet_wrap(~school, labeller=subcatlab)+
+  scale_y_continuous(limits=c(0.8,7.2), breaks=1:7)+
+  scale_color_manual(values=c(p="#FF2700", s="#F8766D"))+
+  labs(x="Time", y="IOS score (child–parent)")+
+  theme_bw()+
+  theme(axis.ticks=element_line(color = "black"),
+        axis.text=element_text(size=14, color = "black"),
+        axis.title=element_text(size=14, color="black"),
+        strip.text=element_text(size=14),
+        legend.title=element_text(size=14, color="black"),
+        legend.position="none") -> fig.cg
+fig.cg  
+
+ggsave(file="fig.ios.cg.png", plot=fig.cg, dpi=350, width=8, height=3.5)
+```
+
+```{r}
+# Child-Other Relationship
+d.all %>% ggplot(aes(x=time, fill=cat, color=cat))+
+  geom_violin(aes(y=others), alpha=0.2, color="NA", fill="#00BFC4")+
+  geom_point(data=d.ios.sum.oth, aes(y=Mean, shape=cat), size=4, position=position_dodge(width=0.6))+
+  geom_linerange(data=d.ios.sum.oth, aes(ymin=Mean-SE, ymax=Mean+SE), size=1.5, position=position_dodge(width=0.6))+
+  geom_line(data=d.ios.sum.oth, aes(y=Mean, group=cat), size=2, position=position_dodge(width=0.6))+
+  # Other Properties
+  facet_wrap(~school, labeller=subcatlab)+
+  scale_y_continuous(limits=c(0.8,7.2), breaks=1:7)+
+  scale_color_manual(values=c(p="#0074D9", s="#00BFC4"))+
+  labs(x="Time", y="IOS score (child–other)")+
+  theme_bw()+
+  theme(axis.ticks=element_line(color = "black"),
+        axis.text=element_text(size=14, color = "black"),
+        axis.title=element_text(size=14, color="black"),
+        strip.text=element_text(size=14),
+        legend.title=element_text(size=14, color="black"),
+        legend.position="none") -> fig.oth
+fig.oth
+
+ggsave(file="fig.ios.oth.png", plot=fig.oth, dpi=350, width=8, height=3.5)
+```
+

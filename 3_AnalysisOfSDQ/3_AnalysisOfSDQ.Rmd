@@ -1,0 +1,249 @@
+---
+title: "Analysis of SDQ"
+author: "Hagihara"
+date: "2021/1/5"
+output: html_document
+---
+
+<style type="text/css">
+.main-container {
+     max-width: 1800px;
+     margin-left: auto;
+     margin-right: auto;
+}
+</style>
+
+
+Analysis of SDQ
+
+
+# Preparation
+```{r include=FALSE}
+R.version   # 4.04
+library(tidyverse)
+library(dplyr)
+#regression
+library(lme4)
+library(lmerTest)
+library(emmeans)
+```
+
+```{r}
+# Data for Primary Analysis
+d.p <- read.csv("../data.csv", header=TRUE) %>% subset(time=="T1" & excludeT1T2!="excluded")
+d.p <- d.p %>% rbind(read.csv("../data.csv", header=TRUE) %>% subset(time=="T2"))
+d.p <- d.p %>% subset(ch_ageY>=4)
+head(d.p)
+summary(d.p)
+
+# Data for Follow-up Analysis
+d.s <- read.csv("../data.csv", header=TRUE) %>% subset(time=="T2" & excludeT2T3!="excluded")
+d.s <- d.s %>% rbind(read.csv("../data.csv", header=TRUE) %>% subset(time=="T3"))
+d.s <- d.s %>% subset(ch_ageY>=4)
+head(d.s)
+summary(d.s)
+```
+
+```{r}
+# Data reshape: Total Difficulties Score
+d.p %>% select(id, time, school, sdq_sum) -> d.p.tds
+head(d.p.tds)
+str(d.p.tds)
+
+d.s %>% select(id, time, school, sdq_sum) -> d.s.tds
+head(d.s.tds)
+str(d.s.tds)
+
+
+# Data reshape: Sub-categories
+d.p %>% select(id, time, school, conduct, hyperactive, emotional, peer, prosocial) %>% 
+  pivot_longer(c(conduct, hyperactive, emotional, peer, prosocial),
+               names_to  ="subcat",
+               values_to ="sdqscore") -> d.p.sub
+head(d.p.sub)
+str(d.p.sub)
+
+d.s %>% select(id, time, school, conduct, hyperactive, emotional, peer, prosocial) %>% 
+  pivot_longer(c(conduct, hyperactive, emotional, peer, prosocial),
+               names_to  ="subcat",
+               values_to ="sdqscore") -> d.s.sub
+head(d.s.sub)
+str(d.s.sub)
+```
+
+
+
+# Descriptive Statistics
+```{r}
+# Total Difficulties Score
+d.p.tds %>% group_by(school, time) %>% 
+  summarise(Full = n(),
+            CountError = sum(is.na(sdq_sum)),
+            CountNoError = Full - CountError,
+            ErrorRarw = CountError / Full,
+            Mean = mean(sdq_sum, na.rm=TRUE),
+            SD   = sd(sdq_sum, na.rm=TRUE),
+            SE   = SD / sqrt(CountNoError)) %>% as.data.frame() -> d.p.tds.sum
+d.p.tds.sum
+
+
+d.s.tds %>% group_by(school, time) %>% 
+  summarise(Full = n(),
+            CountError = sum(is.na(sdq_sum)),
+            CountNoError = Full - CountError,
+            ErrorRarw = CountError / Full,
+            Mean = mean(sdq_sum, na.rm=TRUE),
+            SD   = sd(sdq_sum, na.rm=TRUE),
+            SE   = SD / sqrt(CountNoError)) %>% as.data.frame() -> d.s.tds.sum
+d.s.tds.sum
+
+
+# Sub-categories
+d.p.sub %>% group_by(school, time, subcat) %>% 
+  summarise(Full = n(),
+            CountError = sum(is.na(sdqscore)),
+            CountNoError = Full - CountError,
+            ErrorRarw = CountError / Full,
+            Mean = mean(sdqscore, na.rm=TRUE),
+            SD   = sd(sdqscore, na.rm=TRUE),
+            SE   = SD / sqrt(CountNoError)) %>% as.data.frame() -> d.p.sub.sum
+d.p.sub.sum
+
+d.s.sub %>% group_by(school, time, subcat) %>% 
+  summarise(Full = n(),
+            CountError = sum(is.na(sdqscore)),
+            CountNoError = Full - CountError,
+            ErrorRarw = CountError / Full,
+            Mean = mean(sdqscore, na.rm=TRUE),
+            SD   = sd(sdqscore, na.rm=TRUE),
+            SE   = SD / sqrt(CountNoError)) %>% as.data.frame() -> d.s.sub.sum
+d.s.sub.sum
+```
+
+
+
+# Linear Mixed Model 
+
+## Primary Analysis
+
+### Total Difficulties Score
+```{r R.options = list(width = 1800)}
+# STATISTICAL TEST
+m.p.tds <- lmer(sdq_sum ~ time*school + (1|id), data=d.p.tds)
+anova(m.p.tds, ddf="Kenward-Roger")
+```
+
+
+### Sub-categories
+```{r R.options = list(width = 1800)}
+m.p.sub <- lmer(sdqscore ~ subcat*time*school+(1|id)+(1|id:subcat)+(1|id:time), data=d.p.sub)
+anova(m.p.sub, ddf="Kenward-Roger")
+
+# MULTIPLE COMPARISON
+emmeans(m.p.sub, "subcat") %>% pairs(adjust="bonferroni")
+
+# SIMPLE SLOPE (whom:time:school) 
+m.p.sub.comp <- emmeans(m.p.sub, ~ subcat*time*school)
+pairs(m.p.sub.comp, simple="each", combine=TRUE)
+```
+
+
+## Follow-up Analysis
+
+### Total Difficulties Score
+```{r R.options = list(width = 1800)}
+# STATISTICAL TEST
+m.s.tds <- lmer(sdq_sum ~ time*school + (1|id), data=d.s.tds)
+anova(m.s.tds, ddf="Kenward-Roger")
+```
+
+
+### Sub-categories
+```{r R.options = list(width = 1800)}
+m.s.sub <- lmer(sdqscore ~ subcat*time*school+(1|id)+(1|id:subcat)+(1|id:time), data=d.s.sub)
+anova(m.s.sub, ddf="Kenward-Roger")
+
+# MULTIPLE COMPARISON
+emmeans(m.s.sub, "subcat") %>% pairs(adjust="bonferroni")
+emmeans(m.s.sub, "time") %>% pairs(adjust="bonferroni")
+
+# SIMPLE SLOPE (whom:time:school) 
+m.s.sub.comp <- emmeans(m.s.sub, ~ subcat*time*school)
+pairs(m.s.sub.comp, simple="each", combine=TRUE)
+```
+
+
+
+# Visualization
+```{r}
+subcatlab <- as_labeller(c("presch" = "Preschoolers", 
+                           "sch" = "Schoolers",
+                           "conduct" = "Conduct \n problems", 
+                           "emotional" = "Emotional \n symptoms", 
+                           "hyperactive"="Hyperactivity", 
+                           "peer" = "Peer \n problems", 
+                           "prosocial"="Prosocial \n behavior"))
+
+d.all <- read.csv("../data.csv", header=TRUE) %>% subset(ch_ageY>=4) %>% 
+  select(id, time, school, conduct, hyperactive, emotional, peer, prosocial, sdq_sum) %>% 
+  pivot_longer(c(conduct, hyperactive, emotional, peer, prosocial, sdq_sum),
+               names_to="subcat",
+               values_to="sdqscore")
+
+d.p.tds.sum <- d.p.tds.sum %>% mutate(cat="p")
+d.s.tds.sum <- d.s.tds.sum %>% mutate(cat="s")
+d.tds.sum <- rbind(d.p.tds.sum, d.s.tds.sum)
+
+d.p.sub.sum <- d.p.sub.sum %>% mutate(cat="p")
+d.s.sub.sum <- d.s.sub.sum %>% mutate(cat="s")
+d.sub.sum <- rbind(d.p.sub.sum, d.s.sub.sum)
+```
+
+```{r}
+# Total Difficulties Score
+d.all %>% subset(subcat=="sdq_sum") %>% ggplot(aes(x=time, fill=cat, color=cat))+
+  geom_violin(aes(y=sdqscore), alpha=0.2, color="NA", fill="#F8766D")+
+  geom_point(data=d.tds.sum, aes(y=Mean, shape=cat), size=4, position=position_dodge(width=0.6))+
+  geom_linerange(data=d.tds.sum, aes(ymin=Mean-SE, ymax=Mean+SE), size=1.5, position=position_dodge(width=0.6))+
+  geom_line(data=d.tds.sum, aes(y=Mean, group=cat), size=2, position=position_dodge(width=0.6))+
+  # Other Properties
+  facet_wrap(~school, labeller=subcatlab)+
+  scale_y_continuous(limits=c(0,31.1))+
+  scale_color_manual(values=c(p="#FF2700", s="#F8766D"))+
+  labs(x="Time", y="Total Difficulties score")+
+  theme_bw()+
+  theme(axis.ticks=element_line(color = "black"),
+        axis.text=element_text(size=14, color = "black"),
+        axis.title=element_text(size=14, color="black"),
+        strip.text=element_text(size=14),
+        legend.title=element_text(size=14, color="black"),
+        legend.position="none") -> fig.tds
+fig.tds  
+
+ggsave(file="fig.tds.png", plot=fig.tds, dpi=350, width=8, height=3.5)
+```
+
+```{r}
+# Sub-categories
+d.all %>% subset(subcat!="sdq_sum") %>% ggplot(aes(x=time, fill=cat, color=cat))+
+  geom_violin(aes(y=sdqscore), alpha=0.2, color="NA", fill="#00BFC4")+
+  geom_point(data=d.sub.sum, aes(y=Mean, shape=cat), size=4, position=position_dodge(width=0.6))+
+  geom_linerange(data=d.sub.sum, aes(ymin=Mean-SE, ymax=Mean+SE), size=1.5, position=position_dodge(width=0.6))+
+  geom_line(data=d.sub.sum, aes(y=Mean, group=cat), size=2, position=position_dodge(width=0.6))+
+  # Other Properties
+  facet_grid(subcat~school, labeller=subcatlab)+
+  scale_y_continuous(limits=c(0,10.01), breaks=seq(0,10,2))+
+  scale_color_manual(values=c(p="#0074D9", s="#00BFC4"))+
+  labs(x="Time", y="SDQ score")+
+  theme_bw()+
+  theme(axis.ticks=element_line(color = "black"),
+        axis.text=element_text(size=14, color = "black"),
+        axis.title=element_text(size=14, color="black"),
+        strip.text=element_text(size=14),
+        legend.title=element_text(size=14, color="black"),
+        legend.position="none") -> fig.sub
+fig.sub
+
+ggsave(file="fig.sub.png", plot=fig.sub, dpi=350, width=8, height=8)
+```
+
