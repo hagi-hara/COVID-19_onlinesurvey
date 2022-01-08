@@ -1,0 +1,74 @@
+---
+title: "0_situationInJapan"
+author: "Hiromichi Hagihara"
+date: "2021/10/24"
+output: html_document
+---
+
+Situation in Japan
+
+# Preparation
+```{r}
+R.version #4.0.4
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+```
+
+```{r}
+# Data obtained from https://covid19.mhlw.go.jp/extensions/public/en/index.html
+# Accessed Oct 24th 2021
+
+d <- read.csv("newly_confirmed_cases_per_100_thousand_population_daily.csv", header=TRUE, fileEncoding="utf-8")
+
+d %>% subset(seq==1)
+d %>% subset(seq==442)
+
+d <- d %>% subset(seq <= 442)
+
+summary(d)
+```
+
+
+# Make figure
+```{r}
+xlab = c("16-Jan-20", "07-Apr-20", "25-May-20", "06-Oct-20", "08-Jan-21", "21-Mar-21")  
+  
+# Key dates
+# 07-Apr-20  The Japanese government declared a state of emergency for 7 prefectures
+# 16-Apr-20  The Japanese government expanded a state of emergency to the entire county
+# 14-May-20  The Japanese government removed a state of emergency for 39 prefectures
+# 21-May-20  The Japanese government removed a state of emergency for 3 prefectures
+# 25-May-20  The Japanese government removed a state of emergency for remained 5 prefectures
+# 08-Jan-21  The Japanese government declared a state of emergency for 4 prefectures
+# 13-Jan-21  The Japanese government expanded a state of emergency to the additional 7 prefectures
+# 28-Feb-21  The Japanese government removed a state of emergency for 6 prefectures
+# 21-Mar-21  The Japanese government removed a state of emergency for remained 4 prefectures
+
+
+d[d$date=="09-Feb-21",]$seq  
+
+fig1 <- d %>% ggplot(aes(x=reorder(x=date, X=seq), y=cases))+
+  # Daily Cases
+  geom_bar(stat="Identity", fill="#00BFC4")+
+  # State of Emergency
+  annotate("rect", xmin=d[d$date=="07-Apr-20",]$seq, xmax=d[d$date=="25-May-20",]$seq, ymin=0, ymax=7, alpha=0.2, fill="red")+
+  annotate("rect", xmin=d[d$date=="08-Jan-21",]$seq, xmax=d[d$date=="21-Mar-21",]$seq, ymin=0, ymax=7, alpha=0.2, fill="red")+
+  # Data Collection
+  annotate("rect", xmin=d[d$date=="28-Apr-20",]$seq, xmax=d[d$date=="30-Apr-20",]$seq, ymin=6.7, ymax=7, alpha=1, fill="navy")+
+  annotate("rect", xmin=d[d$date=="06-Oct-20",]$seq, xmax=d[d$date=="26-Oct-20",]$seq, ymin=6.7, ymax=7, alpha=1, fill="navy")+
+  annotate("rect", xmin=d[d$date=="03-Feb-21",]$seq, xmax=d[d$date=="09-Feb-21",]$seq, ymin=6.7, ymax=7, alpha=1, fill="navy")+
+  theme_classic()+
+  scale_y_continuous(limits=c(-0.1,7), breaks=0:7)+
+  scale_x_discrete(breaks=xlab)+
+  labs(x="Date", y="Number of newly confirmed cases \n per 100,000 population")+
+  theme(axis.ticks=element_line(color = "black"),
+        axis.text=element_text(size=10, color = "black"),
+        axis.text.x=element_text(angle=45, hjust=1),
+        axis.title=element_text(size=10, color="black"),
+        strip.text=element_text(size=10),
+        legend.title=element_text(size=10, color="black"))
+fig1
+
+ggsave(file="fig1.png", plot=fig1, dpi=350, width=8, height=4)
+```
