@@ -1,6 +1,6 @@
 # COVID-19_onlinesurvey
 
-Hagihara, H., Yamamoto, N., Meng, S., Sakata, C., Wang, J., Watanabe R., & Moriguchi, Y. (under review). COVID-19 school and kindergarten closure relates to children's social relationships: A longitudinal study in Japan. *Journal Name*. doi:
+Hagihara, H., Yamamoto, N., Meng, S., Sakata, C., Wang, J., Watanabe R., & Moriguchi, Y. (2022). COVID-19 school and kindergarten closure relates to children's social relationships: a longitudinal study in Japan. *Scientific Reports*, *12*, 814. https://doi.org/10.1038/s41598-022-04944-2
   
 <br><br>
 
